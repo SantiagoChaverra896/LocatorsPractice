@@ -11,6 +11,8 @@ using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
 using static System.Collections.Specialized.BitVector32;
+using SeleniumExtras.WaitHelpers;
+using static OpenQA.Selenium.BiDi.Modules.Input.Wheel;
 
 namespace LocatorsPractice
 {
@@ -28,8 +30,10 @@ namespace LocatorsPractice
             // Accept cookies (Ensure this runs before interacting with elements)
             try
             {
-                IWebElement AcceptBtn = driver.FindElement(By.Id("onetrust-accept-btn-handler"));
+                WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
+                IWebElement AcceptBtn = wait.Until(ExpectedConditions.ElementToBeClickable(By.Id("onetrust-accept-btn-handler")));
                 AcceptBtn.Click();
+                wait.Until(ExpectedConditions.InvisibilityOfElementLocated(By.Id("onetrust-banner-sdk")));
             }
             catch (NoSuchElementException)
             {
@@ -38,14 +42,13 @@ namespace LocatorsPractice
         }
 
         [Test]
-        public void Test1()
+        [TestCase("SAP", "Colombia")]
+        [TestCase("Python", "All Locations")]
+        [TestCase("C#", "All Locations")]
+        public void Test1(String programmingLanguage, string location)
         {
             try
             {
-                // Retrieve test parameters for Keywords and Location
-                string programmingLanguage = TestContext.Parameters.Get("keyword", "c#"); // Default to "C#" if not provided
-                string location = TestContext.Parameters.Get("location", "All Locations"); // Default to "All Locations"
-                              
                 // Find a link “Carriers” and click on it
                 IWebElement CareersBttn = driver.FindElement(By.XPath("//li[@class='top-navigation__item epam'][5]"));
                 CareersBttn.Click();
@@ -57,7 +60,7 @@ namespace LocatorsPractice
                 //Select “All Locations” in the “Location” field(should be taken from the test parameter)
                 IWebElement LocationField = driver.FindElement(By.XPath("//span[@class='select2-selection__rendered']"));
                 LocationField.Click();
-                driver.FindElement(By.XPath($"//li[@title='{location}']")).Click();
+                driver.FindElement(By.XPath($"//li[contains(text(),'{location}')]")).Click(); ////li[@title='{location}']
 
                 //Select the option “Remote”
                 IWebElement RemoteCheck = driver.FindElement(By.XPath("//label[@for='id-93414a92-598f-316d-b965-9eb0dfefa42d-remote']"));
@@ -67,37 +70,45 @@ namespace LocatorsPractice
                 IWebElement FindBttn = driver.FindElement(By.XPath("//button[@type='submit']"));
                 FindBttn.Click();
 
-                Thread.Sleep(2000); // Wait for the initial results to load
-
-
-                //Scroll down to one of the labels on the list
-                IWebElement RelevanceLabel = driver.FindElement(By.XPath("//span[contains(text(),'Register your interest')]"));
-                new Actions(driver).ScrollToElement(RelevanceLabel).Perform();
-
-                // Wait till the page fully loads all results
-                Thread.Sleep(5000);
-
-                //Locate the latest item on the list and click on the 'View and Apply' button
-                IWebElement LastItem = driver.FindElement(By.XPath("//ul[@class='search-result__list']/li[last()]/div/div/div/div/a"));
-                LastItem.Click();
+                //Explicit wait implemented , to interact with the loader animation
+                WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
+                Actions actions = new Actions(driver);
+                
+                while (true) 
+                {
+                    // Wait for loading animation to disappear
+                    wait.Until(ExpectedConditions.InvisibilityOfElementLocated(By.CssSelector(".preloader")));
+                    // Scroll to the last item using Actions class
+                    IWebElement LastItem = driver.FindElement(By.XPath("//ul[@class='search-result__list']/li[last()]//div//div/a"));
+                    actions.ScrollToElement(LastItem).Perform();
+                    // Check if the loading animation appears again
+                    var isLoadingVisible = driver.FindElements(By.CssSelector(".preloader")).Any(e => e.Displayed);
+                    if (!isLoadingVisible)
+                    {
+                        LastItem = driver.FindElement(By.XPath("//ul[@class='search-result__list']/li[last()]//div//div/a"));
+                        actions.ScrollToElement(LastItem).Perform();
+                        LastItem.Click();
+                        break;
+                    }
+                }
 
                 //Validate that the programming language mentioned in the step above is on a page
-                var Responsabilities = driver.FindElement(By.XPath("//div[@class='vacancy-details-23__content-holder']/ul[1]"));
+                var Requirements = driver.FindElement(By.XPath("//div[@class='vacancy-details-23__content-holder']/ul[2]"));
 
                 //Find all <li> items inside the list
-                var listItems = Responsabilities.FindElements(By.TagName("li"));
+                var listItems = Requirements.FindElements(By.TagName("li"));
 
                 //Check if any <li> contains "C#"
                 bool containsLanguage = listItems.Any(item => item.Text.Contains(programmingLanguage, StringComparison.OrdinalIgnoreCase));
 
                 if (containsLanguage)
                 {
-                    Console.WriteLine($"Test Passed: Found '{programmingLanguage}' in responsabilities description.");
+                    Console.WriteLine($"Test Passed: Found '{programmingLanguage}' in Requirements description.");
                     Assert.Pass();
                 }
                 else
                 {
-                    Console.WriteLine($"Test Failed: '{programmingLanguage}' not found in responsabilities description.");
+                    Console.WriteLine($"Test Failed: '{programmingLanguage}' not found in Requirements description.");
                     Assert.Fail();
                 }
             }
@@ -108,19 +119,20 @@ namespace LocatorsPractice
         }
 
         [Test]
-        public void Test2() 
+        [TestCase("CLOUD")]
+        [TestCase("BLOCKCHAIN")]
+        [TestCase("Automation")]
+        public void Test2(string searchString) 
         {
             try 
             {
-                //Test Parameters
-                string searchString = TestContext.Parameters.Get("keyword", "Blockchain"); // BLOCKCHAIN”/”Cloud”/”Automation” Default to "BLOCKCHAIN" if not provided
-
                 //Find the magnifier Icon and click on it
                 IWebElement magnifierIcon = driver.FindElement(By.XPath("//button[@class='header-search__button header__icon']"));
                 magnifierIcon.Click();
 
-                Thread.Sleep(1000); // wait 1 second fot the searchbox to be visible
-
+                WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
+                wait.Until(ExpectedConditions.ElementIsVisible(By.Id("new_form_search")));
+                
                 // Find a search string and put there “BLOCKCHAIN”/”Cloud”/”Automation” (use as a parameter for a test)
                 IWebElement searchBox = driver.FindElement(By.Id("new_form_search"));
                 searchBox.SendKeys(searchString);
@@ -128,13 +140,15 @@ namespace LocatorsPractice
                 //Click 'Find' button
                 IWebElement findBttn = driver.FindElement(By.CssSelector(".custom-button"));
                 findBttn.Click();
-
-                Thread.Sleep(1000);
-
+                
+                wait.Until(ExpectedConditions.InvisibilityOfElementLocated(By.CssSelector(".preloader")));
+                
                 //Scroll down to the Page Footer
                 IWebElement pageFooter = driver.FindElement(By.XPath("//div[@class='footer-inner']"));
                 new Actions(driver).ScrollToElement(pageFooter).Perform();
-                
+                           
+                wait.Until(ExpectedConditions.ElementIsVisible(By.XPath("//span[contains(text(),'View More')]")));
+
                 // First Scroll to view more bttn
                 IWebElement viewMoreBttn = driver.FindElement(By.XPath("//span[contains(text(),'View More')]"));
                 new Actions(driver).ScrollToElement(viewMoreBttn).Perform();
@@ -142,8 +156,8 @@ namespace LocatorsPractice
                 // This loop executes until all the found items on the list are displayed
                 while (viewMoreBttn.Displayed) 
                 {
-                    viewMoreBttn.Click() ;
-                    Thread.Sleep(1000); // Wait 1 second till new results load on the page.
+                    viewMoreBttn.Click();
+                    wait.Until(ExpectedConditions.InvisibilityOfElementLocated(By.CssSelector(".preloader")));
                     if (viewMoreBttn.Displayed) 
                     {
                         new Actions(driver).ScrollToElement(viewMoreBttn).Perform();
@@ -151,7 +165,7 @@ namespace LocatorsPractice
                     else 
                     {
                         break;
-                    }                    
+                    }
                 }
 
                 //Find all links displayed text
